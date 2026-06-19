@@ -6,9 +6,121 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String?
+// ───────────────────────── Fase 1 — Núcleo de descoberta ─────────────────────────
+
+enum ChurchType {
+  IGREJA
+  CAPELA
+  BASILICA
+  SANTUARIO
+  MOSTEIRO
+  SEMINARIO
+}
+
+enum MassKind {
+  MISSA
+  CONFISSAO
+  ADORACAO
+}
+
+/// Origem do dado para fins de frescor (§3.7).
+enum FreshnessSource {
+  ENRICHMENT
+  USER_FEEDBACK
+  SUGGESTION
+  ADMIN
+  GUARDIAN
+}
+
+model Church {
+  id         Int        @id @default(autoincrement())
+  /// Slug público curto e imutável p/ link universal (paroquias.app/i/<slug>).
+  publicSlug String     @unique
+  name       String
+  type       ChurchType @default(IGREJA)
+
+  lat Decimal @db.Decimal(9, 6)
+  lng Decimal @db.Decimal(9, 6)
+  /// Coluna geográfica derivada de lat/lng (mantida por trigger). Nunca lida/escrita
+  /// pelo client Prisma — só via $queryRaw (§3.6).
+  geom Unsupported("geography(Point, 4326)")?
+
+  // Endereço pode ser parcial (RNF09).
+  addressLine String?
+  district    String?
+  city        String?
+  state       String?
+  postalCode  String?
+
+  phone    String?
+  photoUrl String?
+
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attribute     ChurchAttribute?
+  massSchedules MassSchedule[]
+  events        Event[]
+
+  @@index([type])
+  @@index([city])
+}
+
+model MassSchedule {
+  id       Int      @id @default(autoincrement())
+  church   Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId Int
+  kind     MassKind @default(MISSA)
+
+  /// Recorrência semanal (0=domingo … 6=sábado). Nulo se for evento pontual.
+  dayOfWeek Int?
+  /// Data pontual (sobrescreve a recorrência). Nula se for recorrente.
+  date      DateTime? @db.Date
+  /// Horário de início no formato "HH:mm" (fuso APP_TIMEZONE).
+  startTime String    @db.VarChar(5)
+  note      String?
+
+  // Frescor (§3.7) — alto valor.
+  lastConfirmedAt DateTime?
+  source          FreshnessSource @default(ENRICHMENT)
+  confidence      Float           @default(0.5)
+
+  validFrom DateTime?
+  validTo   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([churchId, kind])
+  @@index([dayOfWeek])
+}
+
+/// Atributos/serviços da igreja (1:1). Colunas booleanas nomeadas (preferidas a JSONB).
+model ChurchAttribute {
+  church   Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId Int    @id
+
+  acessibilidade Boolean @default(false)
+  estacionamento Boolean @default(false)
+  livraria       Boolean @default(false)
+  adoracao       Boolean @default(false)
+  confissao      Boolean @default(false)
+  grupoJovens    Boolean @default(false)
+  catequese      Boolean @default(false)
+
+  updatedAt DateTime @updatedAt
+}
+
+model Event {
+  id          Int       @id @default(autoincrement())
+  church      Church    @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId    Int
+  title       String
+  description String?
+  startsAt    DateTime
+  endsAt      DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([churchId, startsAt])
 }

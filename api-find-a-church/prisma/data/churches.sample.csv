@@ -1,0 +1,9 @@
+publicSlug,name,type,lat,lng,city,state,district
+100001,Catedral da Sé,IGREJA,-23.550520,-46.633308,São Paulo,SP,Sé
+100002,Mosteiro de São Bento,MOSTEIRO,-23.534600,-46.633300,São Paulo,SP,Centro
+100003,Igreja da Consolação,IGREJA,-23.548000,-46.646000,São Paulo,SP,Consolação
+100004,Basílica de Nossa Senhora do Carmo,BASILICA,-23.547500,-46.631000,São Paulo,SP,Sé
+100005,Paróquia Santa Cecília,IGREJA,-23.538900,-46.650900,São Paulo,SP,Santa Cecília
+100006,Capela São Luís Gonzaga,CAPELA,-23.561400,-46.656000,São Paulo,SP,Bela Vista
+100007,Santuário do Sagrado Coração,SANTUARIO,-23.560200,-46.640100,São Paulo,SP,Liberdade
+100008,Igreja Nossa Senhora da Boa Morte,IGREJA,-23.546900,-46.632700,São Paulo,SP,Sé

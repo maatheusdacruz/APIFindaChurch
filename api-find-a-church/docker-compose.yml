@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: findachurch-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: findachurch
+      POSTGRES_PASSWORD: findachurch
+      POSTGRES_DB: findachurch
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U findachurch -d findachurch"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: findachurch-app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql://findachurch:findachurch@db:5432/findachurch?schema=public"
+      NODE_ENV: development
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    # Aplica migrações pendentes e sobe o Next.
+    command: sh -c "npx prisma migrate deploy && npm run dev"
+
+volumes:
+  pgdata:
