@@ -1,0 +1,71 @@
+[
+  {
+    "osm_id": 566811637,
+    "osm_type": "node",
+    "name": "Igreja de Nossa Senhora do Carmo da Lapa do Desterro",
+    "kind": "church",
+    "denomination": "catholic",
+    "latitude": -22.914651,
+    "longitude": -43.1777432,
+    "address": "",
+    "city": "Rio de Janeiro",
+    "state": "Rio de Janeiro",
+    "score": 135,
+    "is_catholic": true,
+    "photo_url": null,
+    "tags": {
+      "amenity": "place_of_worship",
+      "denomination": "catholic",
+      "name": "Igreja de Nossa Senhora do Carmo da Lapa do Desterro",
+      "religion": "christian",
+      "wikidata": "Q96586968"
+    }
+  },
+  {
+    "osm_id": 198746798,
+    "osm_type": "way",
+    "name": "Igreja de Nossa Senhora do Monte do Carmo",
+    "kind": "church",
+    "denomination": "catholic",
+    "latitude": -22.9034301,
+    "longitude": -43.1754843,
+    "address": "Rua Primeiro de Março",
+    "city": "Rio de Janeiro",
+    "state": "Rio de Janeiro",
+    "score": 135,
+    "is_catholic": true,
+    "photo_url": null,
+    "tags": {
+      "addr:city": "Rio de Janeiro",
+      "addr:postcode": "20010-000",
+      "addr:street": "Rua Primeiro de Março",
+      "addr:suburb": "Centro",
+      "amenity": "place_of_worship",
+      "denomination": "catholic",
+      "name": "Igreja de Nossa Senhora do Monte do Carmo",
+      "phone": "+55-21-22420830",
+      "religion": "christian"
+    }
+  },
+  {
+    "osm_id": 557170156,
+    "osm_type": "node",
+    "name": "Igreja de Nossa Senhora do Parto",
+    "kind": "church",
+    "denomination": "catholic",
+    "latitude": -22.9058593,
+    "longitude": -43.1769091,
+    "address": "",
+    "city": "Rio de Janeiro",
+    "state": "Rio de Janeiro",
+    "score": 135,
+    "is_catholic": true,
+    "photo_url": null,
+    "tags": {
+      "amenity": "place_of_worship",
+      "denomination": "catholic",
+      "name": "Igreja de Nossa Senhora do Parto",
+      "religion": "christian"
+    }
+  }
+]

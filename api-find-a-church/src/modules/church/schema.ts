@@ -110,6 +110,9 @@ export const churchSummarySchema = z
     distanceM: z.number().nullable(),
     nextMassAt: z.string().datetime().nullable(),
     freshness: freshnessSchema.nullable(),
+    hasMassNow: z.boolean(),
+    hasSpecialEvent: z.boolean(),
+    isFavorite: z.boolean(),
   })
   .openapi('ChurchSummary')
 
@@ -134,6 +137,8 @@ export const churchProfileSchema = z
     attributes: churchAttributeSchema,
     schedules: z.array(massScheduleSchema),
     freshness: freshnessSchema.nullable(),
+    hasMassNow: z.boolean(),
+    isFavorite: z.boolean(),
   })
   .openapi('ChurchProfile')
 

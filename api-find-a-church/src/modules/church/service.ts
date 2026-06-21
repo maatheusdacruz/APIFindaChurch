@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { env } from '@/config/env'
 import { nextOccurrence } from '@/lib/time'
 import { NotFoundError } from '@/lib/errors'
+import { prisma } from '@/lib/prisma'
+import type { ChurchType } from '@prisma/client'
 import {
   listChurches,
   getChurchById,
@@ -24,6 +26,16 @@ type Schedule = ChurchWithRelations['massSchedules'][number]
 type Freshness = z.infer<typeof freshnessSchema>
 
 const DAY_MS = 86_400_000
+
+function isMassHappeningNow(schedules: Schedule[], now: Date): boolean {
+  const lookback = new Date(now.getTime() - 60 * 60 * 1000)
+  for (const s of schedules) {
+    if (s.kind !== 'MISSA') continue
+    const at = nextOccurrence(s, lookback)
+    if (at && at.getTime() <= now.getTime()) return true
+  }
+  return false
+}
 
 /** Frescor de um horário (§3.7): nunca apagamos por estar velho, só sinalizamos. */
 function freshnessOf(s: Schedule, now: Date): Freshness {
@@ -65,6 +77,9 @@ function toSummary(c: ChurchWithRelations, now: Date, distanceM: number | null):
     distanceM,
     nextMassAt: next ? next.at.toISOString() : null,
     freshness: next ? freshnessOf(next.schedule, now) : null,
+    hasMassNow: isMassHappeningNow(c.massSchedules, now),
+    hasSpecialEvent: false,
+    isFavorite: false,
   }
 }
 
@@ -112,6 +127,8 @@ function toProfile(c: ChurchWithRelations, now: Date, distanceM: number | null):
     },
     schedules: c.massSchedules.map((s) => scheduleDto(s, now)),
     freshness: next ? freshnessOf(next.schedule, now) : null,
+    hasMassNow: isMassHappeningNow(c.massSchedules, now),
+    isFavorite: false,
   }
 }
 
@@ -168,6 +185,51 @@ export async function getEvents(id: number, page: number, pageSize: number, now 
     endsAt: e.endsAt ? e.endsAt.toISOString() : null,
   }))
   return { data, meta: { page, pageSize, total } }
+}
+
+// ─── Criação manual ───────────────────────────────────────────────────────────
+
+interface CreateChurchInput {
+  name: string
+  type?: ChurchType
+  lat: number
+  lng: number
+  addressLine?: string
+  district?: string
+  city?: string
+  state?: string
+  postalCode?: string
+  phone?: string
+  photoUrl?: string
+}
+
+export async function createChurch(input: CreateChurchInput, userId: number) {
+  const slug = `user-${userId}-${Date.now()}`
+  const church = await prisma.church.create({
+    data: {
+      publicSlug: slug,
+      name: input.name,
+      type: (input.type as ChurchType) ?? 'IGREJA',
+      lat: input.lat,
+      lng: input.lng,
+      addressLine: input.addressLine ?? null,
+      district: input.district ?? null,
+      city: input.city ?? null,
+      state: input.state ?? null,
+      postalCode: input.postalCode ?? null,
+      phone: input.phone ?? null,
+      photoUrl: input.photoUrl ?? null,
+      attribute: {
+        create: {
+          acessibilidade: false, estacionamento: false,
+          confissao: false, adoracao: false, livraria: false,
+          grupoJovens: false, catequese: false,
+        },
+      },
+    },
+    select: { id: true, publicSlug: true, name: true, type: true, lat: true, lng: true, city: true },
+  })
+  return { data: { ...church, lat: Number(church.lat), lng: Number(church.lng) } }
 }
 
 /** Haversine (m) — usado só para anexar distância no perfil quando lat/lng vêm na query. */

@@ -25,7 +25,8 @@ export async function findNearbyChurchIds(params: {
       ? Prisma.sql`AND "type"::text IN (${Prisma.join(types)})`
       : Prisma.empty
 
-  return prisma.$queryRaw<NearRow[]>`
+  console.log(`[findNearby] lat=${lat} lng=${lng} raio=${radiusM}m`)
+  const rows = await prisma.$queryRaw<NearRow[]>`
     SELECT "id", ST_Distance("geom", ${point}) AS distance_m
     FROM "Church"
     WHERE "geom" IS NOT NULL
@@ -34,6 +35,8 @@ export async function findNearbyChurchIds(params: {
     ORDER BY distance_m ASC
     LIMIT ${limit}
   `
+  console.log(`[findNearby] encontradas=${rows.length}`)
+  return rows
 }
 
 /** Distância (m) de uma igreja específica a um ponto, ou null se sem geom. */

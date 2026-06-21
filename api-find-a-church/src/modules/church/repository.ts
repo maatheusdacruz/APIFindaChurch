@@ -20,7 +20,9 @@ export type ListFilters = {
 
 function bboxWhere(bbox?: string): Prisma.ChurchWhereInput {
   if (!bbox) return {}
+  // Frontend envia minLng,minLat,maxLng,maxLat (ordem geográfica padrão).
   const [minLng, minLat, maxLng, maxLat] = bbox.split(',').map(Number)
+  console.log('[bbox] parsed →', { minLng, minLat, maxLng, maxLat })
   return {
     lat: { gte: minLat, lte: maxLat },
     lng: { gte: minLng, lte: maxLng },
@@ -34,6 +36,7 @@ export async function listChurches(f: ListFilters): Promise<{ rows: ChurchWithRe
     ...bboxWhere(f.bbox),
   }
 
+  console.log('[listChurches] where =', JSON.stringify(where))
   const [rows, total] = await Promise.all([
     prisma.church.findMany({
       where,
@@ -44,6 +47,7 @@ export async function listChurches(f: ListFilters): Promise<{ rows: ChurchWithRe
     }),
     prisma.church.count({ where }),
   ])
+  console.log(`[listChurches] total=${total} retornados=${rows.length}`)
   return { rows, total }
 }
 

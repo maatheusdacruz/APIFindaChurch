@@ -32,6 +32,19 @@ enum FreshnessSource {
   GUARDIAN
 }
 
+enum statusSuggestion {
+  PENDENT
+  REVISION
+  APPLY
+  REJECTED
+}
+
+enum SuggestionChangeType {
+  ADD
+  EDIT
+  DELETE
+}
+
 model Church {
   id         Int        @id @default(autoincrement())
   /// Slug público curto e imutável p/ link universal (paroquias.app/i/<slug>).
@@ -58,9 +71,19 @@ model Church {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  attribute     ChurchAttribute?
-  massSchedules MassSchedule[]
-  events        Event[]
+  attribute               ChurchAttribute?
+  massSchedules           MassSchedule[]
+  massScheduleSuggestions MassScheduleSuggestion[]
+  events                  Event[]
+
+  // Fase 3
+  favorites     Favorite[]
+  checkIns      CheckIn[]
+
+  // Fase 4
+  guardianRoles GuardianRole[]
+  parishes      ChurchParish[]
+  muralPosts    MuralPost[]
 
   @@index([type])
   @@index([city])
@@ -91,8 +114,54 @@ model MassSchedule {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  suggestions MassScheduleSuggestion[] @relation("SuggestionTarget")
+
   @@index([churchId, kind])
   @@index([dayOfWeek])
+}
+
+model MassScheduleSuggestion {
+  id       Int      @id @default(autoincrement())
+  church   Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId Int
+  kind     MassKind @default(MISSA)
+
+  /// ADD = novo horário; EDIT = alterar existente; DELETE = remover existente.
+  changeType SuggestionChangeType @default(ADD)
+
+  /// Preenchido quando changeType = EDIT ou DELETE — aponta para o MassSchedule original.
+  targetSchedule   MassSchedule? @relation("SuggestionTarget", fields: [targetScheduleId], references: [id], onDelete: SetNull)
+  targetScheduleId Int?
+
+  /// Recorrência semanal (0=domingo … 6=sábado). Nulo se for evento pontual.
+  dayOfWeek Int?
+  /// Data pontual (sobrescreve a recorrência). Nula se for recorrente.
+  date      DateTime? @db.Date
+  /// Horário de início no formato "HH:mm" (fuso APP_TIMEZONE). Nulo apenas em sugestões DELETE.
+  startTime String?   @db.VarChar(5)
+  note      String?
+
+  validFrom DateTime?
+  validTo   DateTime?
+
+  status           statusSuggestion @default(PENDENT)
+  rejectionReason  String?
+
+  /// Usuário que submeteu a sugestão (null = anônimo).
+  suggestedBy   User? @relation("MSSuggestedBy", fields: [suggestedById], references: [id], onDelete: SetNull)
+  suggestedById Int?
+
+  /// Usuário que aprovou ou rejeitou.
+  reviewedBy   User?     @relation("MSReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedById Int?
+  reviewedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([churchId, status])
+  @@index([suggestedById])
+  @@index([status])
 }
 
 /// Atributos/serviços da igreja (1:1). Colunas booleanas nomeadas (preferidas a JSONB).
@@ -123,4 +192,366 @@ model Event {
   createdAt DateTime @default(now())
 
   @@index([churchId, startsAt])
+}
+
+// ───────────────────────── Fase 2 — Frescor ─────────────────────────
+
+enum SuggestionStatus {
+  PENDING
+  APPLIED
+  REJECTED
+  IN_REVIEW
+}
+
+enum SuggestionSource {
+  APP
+  WHATSAPP
+  TELEGRAM
+  FORM
+  ENRICHMENT
+}
+
+enum RiskTier {
+  LOW
+  HIGH
+}
+
+enum FeedbackValue {
+  CONFIRM
+  DENY
+}
+
+enum EnrichmentJobStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+model Suggestion {
+  id             Int              @id @default(autoincrement())
+  /// "Church" | "MassSchedule"
+  targetType     String
+  targetId       Int
+  field          String
+  currentValue   String?
+  proposedValue  String
+  riskTier       RiskTier
+  status         SuggestionStatus @default(PENDING)
+  source         SuggestionSource @default(APP)
+  submittedByRef String?
+  confidence     Float            @default(0.5)
+  notes          String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  revisions      Revision[]
+
+  // Fase 4
+  consensusState ConsensusState?
+  votes          ConsensusVote[]
+
+  @@index([targetType, targetId])
+  @@index([status])
+}
+
+model Revision {
+  id           Int             @id @default(autoincrement())
+  /// "Church" | "MassSchedule"
+  entity       String
+  entityId     Int
+  field        String
+  oldValue     String?
+  newValue     String
+  changedByRef String?
+  source       FreshnessSource
+  /// ID da Revision que esta reverte (para rastreabilidade).
+  reversibleOf Int?
+  suggestionId Int?
+  suggestion   Suggestion?     @relation(fields: [suggestionId], references: [id])
+  createdAt    DateTime        @default(now())
+
+  @@index([entity, entityId])
+  @@index([suggestionId])
+}
+
+model Feedback {
+  id         Int           @id @default(autoincrement())
+  /// "MassSchedule"
+  targetType String
+  targetId   Int
+  value      FeedbackValue
+  deviceRef  String?
+  createdAt  DateTime      @default(now())
+
+  @@index([targetType, targetId])
+}
+
+model EnrichmentSource {
+  id          Int             @id @default(autoincrement())
+  /// "google_places" | "site" | "facebook" | "diocese"
+  origin      String          @unique
+  description String?
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+
+  jobs        EnrichmentJob[]
+}
+
+model EnrichmentJob {
+  id              Int                 @id @default(autoincrement())
+  source          EnrichmentSource    @relation(fields: [sourceId], references: [id])
+  sourceId        Int
+  status          EnrichmentJobStatus @default(PENDING)
+  payload         Json
+  matchedChurchId Int?
+  coverage        Float?
+  quality         Float?
+  errorMessage    String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([sourceId])
+  @@index([matchedChurchId])
+  @@index([status])
+}
+
+// ───────────────────────── Fase 3 — Recorrência ─────────────────────────
+
+enum NotificationKind {
+  MASS_REMINDER
+  EVENT_REMINDER
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  CANCELLED
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  deviceId     String   @unique
+  /// Campos opcionais para conta nominal (email+senha). Usuários anônimos ficam com null.
+  email        String?  @unique
+  passwordHash String?
+  name         String?
+  /// true = admin de plataforma (pode usar x-admin-key equivalente por token).
+  isPlatformAdmin Boolean @default(false)
+  pushToken    String?
+  reputation   Float    @default(1.0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  favorites     Favorite[]
+  checkIns      CheckIn[]
+  notifications ScheduledNotification[]
+
+  // Fase 4
+  guardianRoles        GuardianRole[]
+  adminRoles           AdminRole[]
+  endorsementsGiven    Endorsement[]            @relation("EndorsementFrom")
+  votes                ConsensusVote[]
+  muralPosts           MuralPost[]
+  massScheduleSuggestions MassScheduleSuggestion[] @relation("MSSuggestedBy")
+  reviewedSuggestions     MassScheduleSuggestion[] @relation("MSReviewedBy")
+}
+
+model Favorite {
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  church    Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId  Int
+  createdAt DateTime @default(now())
+
+  @@id([userId, churchId])
+  @@index([userId])
+}
+
+model CheckIn {
+  id             Int      @id @default(autoincrement())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         Int
+  church         Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId       Int
+  massScheduleId Int?
+  createdAt      DateTime @default(now())
+
+  @@index([churchId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model ScheduledNotification {
+  id             Int                @id @default(autoincrement())
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         Int
+  churchId       Int
+  massScheduleId Int?
+  kind           NotificationKind   @default(MASS_REMINDER)
+  fireAt         DateTime
+  status         NotificationStatus @default(PENDING)
+  payload        Json
+  createdAt      DateTime           @default(now())
+
+  @@index([userId])
+  @@index([fireAt, status])
+}
+
+// ───────────────────────── Fase 4 — Comunidade e governança ─────────────────────────
+
+enum ParishStatus {
+  UNCLAIMED
+  PROVISIONAL
+  VERIFIED
+}
+
+enum GuardianStatus {
+  ACTIVE
+  FROZEN
+  REMOVED
+}
+
+enum AdminValidationLevel {
+  PROVISIONAL
+  VERIFIED
+}
+
+enum AdminStatus {
+  ACTIVE
+  REMOVED
+}
+
+enum MuralPostType {
+  AVISO
+  EVENTO
+  PEDIDO
+  CAMPANHA
+}
+
+enum ConsensusOutcome {
+  PENDING
+  APPLIED
+  REJECTED
+}
+
+model Parish {
+  id               Int          @id @default(autoincrement())
+  name             String
+  status           ParishStatus @default(UNCLAIMED)
+  claimedByAdminId Int?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  churches   ChurchParish[]
+  adminRoles AdminRole[]
+}
+
+model ChurchParish {
+  church    Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId  Int
+  parish    Parish   @relation(fields: [parishId], references: [id], onDelete: Cascade)
+  parishId  Int
+  contested Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@id([churchId, parishId])
+  @@index([parishId])
+}
+
+model GuardianRole {
+  id              Int            @id @default(autoincrement())
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          Int
+  church          Church         @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId        Int
+  status          GuardianStatus @default(ACTIVE)
+  behavioralScore Float          @default(0.5)
+  claimedAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  endorsementsReceived Endorsement[] @relation("EndorsementTarget")
+
+  @@unique([userId, churchId])
+  @@index([churchId, status])
+}
+
+model AdminRole {
+  id              Int                  @id @default(autoincrement())
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          Int
+  parish          Parish               @relation(fields: [parishId], references: [id], onDelete: Cascade)
+  parishId        Int
+  validationLevel AdminValidationLevel @default(PROVISIONAL)
+  status          AdminStatus          @default(ACTIVE)
+  claimedAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@unique([userId, parishId])
+  @@index([parishId])
+}
+
+model Report {
+  id          Int      @id @default(autoincrement())
+  /// "GuardianRole" | "MuralPost" | "Suggestion"
+  targetType  String
+  targetId    Int
+  reporterRef String?
+  reason      String
+  createdAt   DateTime @default(now())
+
+  @@index([targetType, targetId])
+}
+
+model Endorsement {
+  id             Int          @id @default(autoincrement())
+  fromUser       User         @relation("EndorsementFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  fromUserId     Int
+  guardianRole   GuardianRole @relation("EndorsementTarget", fields: [guardianRoleId], references: [id], onDelete: Cascade)
+  guardianRoleId Int
+  createdAt      DateTime     @default(now())
+
+  @@unique([fromUserId, guardianRoleId])
+}
+
+model ConsensusState {
+  id           Int              @id @default(autoincrement())
+  suggestion   Suggestion       @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  suggestionId Int              @unique
+  outcome      ConsensusOutcome @default(PENDING)
+  totalWeight  Float            @default(0)
+  threshold    Float
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  votes ConsensusVote[]
+}
+
+model ConsensusVote {
+  id               Int            @id @default(autoincrement())
+  consensusState   ConsensusState @relation(fields: [consensusStateId], references: [id], onDelete: Cascade)
+  consensusStateId Int
+  suggestion       Suggestion     @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  suggestionId     Int
+  voter            User           @relation(fields: [voterId], references: [id], onDelete: Cascade)
+  voterId          Int
+  approve          Boolean
+  weight           Float          @default(1.0)
+  createdAt        DateTime       @default(now())
+
+  @@unique([consensusStateId, voterId])
+  @@index([suggestionId])
+}
+
+model MuralPost {
+  id        Int           @id @default(autoincrement())
+  church    Church        @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId  Int
+  type      MuralPostType
+  content   String
+  author    User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  Int
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([churchId, createdAt])
 }
