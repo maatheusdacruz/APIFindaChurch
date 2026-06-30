@@ -78,6 +78,9 @@ export async function listFavorites(userId: number, query: z.infer<typeof favori
       distanceM: null,
       nextMassAt: best ? best.at.toISOString() : null,
       freshness: best ? freshnessOf(best.schedule, now) : null,
+      hasMassNow: false,
+      hasSpecialEvent: false,
+      isFavorite: true,
     }
   })
 

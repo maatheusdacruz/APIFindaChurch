@@ -22,6 +22,16 @@ function freshnessOf(s: ChurchWithRelations['massSchedules'][0], now: Date) {
   }
 }
 
+function isMassNow(schedules: ChurchWithRelations['massSchedules'], now: Date): boolean {
+  const lookback = new Date(now.getTime() - 60 * 60 * 1000)
+  for (const s of schedules) {
+    if (s.kind !== 'MISSA') continue
+    const at = nextOccurrence(s, lookback)
+    if (at && at.getTime() <= now.getTime()) return true
+  }
+  return false
+}
+
 function toSummary(c: ChurchWithRelations, distanceM: number | null, now: Date): z.infer<typeof churchSummarySchema> {
   let best: { schedule: ChurchWithRelations['massSchedules'][0]; at: Date } | null = null
   for (const s of c.massSchedules) {
@@ -41,6 +51,9 @@ function toSummary(c: ChurchWithRelations, distanceM: number | null, now: Date):
     distanceM,
     nextMassAt: best ? best.at.toISOString() : null,
     freshness: best ? freshnessOf(best.schedule, now) : null,
+    hasMassNow: isMassNow(c.massSchedules, now),
+    hasSpecialEvent: false,
+    isFavorite: false,
   }
 }
 

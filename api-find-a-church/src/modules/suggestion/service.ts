@@ -27,11 +27,25 @@ function toDto(s: Awaited<ReturnType<typeof getSuggestionById>>): z.infer<typeof
   }
 }
 
+// Maps user-facing SuggestionField enum → actual Prisma Church field name
+const CHURCH_FIELD_MAP: Record<string, string> = {
+  NAME: 'name',
+  PHONE: 'phone',
+  ADDRESS: 'addressLine',
+  TYPE: 'type',
+  COORDINATES: 'lat', // representative field; approving COORDINATES needs special handling
+}
+
 async function getCurrentValue(targetType: string, targetId: number, field: string): Promise<string | null> {
   if (targetType === 'Church') {
     const church = await prisma.church.findUnique({ where: { id: targetId } })
     if (!church) return null
-    const val = (church as Record<string, unknown>)[field]
+    const prismaField = CHURCH_FIELD_MAP[field] ?? field
+    if (field === 'COORDINATES') {
+      // Show "lat, lng" as the current value
+      return `${church.lat}, ${church.lng}`
+    }
+    const val = (church as Record<string, unknown>)[prismaField]
     return val != null ? String(val) : null
   }
   if (targetType === 'MassSchedule') {

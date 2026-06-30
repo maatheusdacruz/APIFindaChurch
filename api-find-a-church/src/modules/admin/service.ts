@@ -152,6 +152,26 @@ export async function dismissReport(reportId: number) {
 
 // ─── Suggestions ──────────────────────────────────────────────────────────────
 
+// Maps the user-facing SuggestionField enum → actual Prisma Church field names.
+// Fields not listed here (OTHER, SCHEDULE) are informational-only — mark APPLIED
+// but don't touch the church record.
+const CHURCH_FIELD_MAP: Record<string, string> = {
+  NAME: 'name',
+  PHONE: 'phone',
+  ADDRESS: 'addressLine',
+  TYPE: 'type',
+}
+
+// COORDINATES is "lat, lng" — needs special parsing.
+function applyCoordinates(proposedValue: string): { lat?: number; lng?: number } {
+  const parts = proposedValue.split(',').map((s) => parseFloat(s.trim()))
+  const [lat, lng] = parts
+  const result: { lat?: number; lng?: number } = {}
+  if (!isNaN(lat)) result.lat = lat
+  if (!isNaN(lng)) result.lng = lng
+  return result
+}
+
 export async function listAdminSuggestions(status: string) {
   const items = await prisma.suggestion.findMany({
     where: { status: status as 'PENDING' | 'APPLIED' | 'REJECTED' | 'IN_REVIEW' },
@@ -159,8 +179,22 @@ export async function listAdminSuggestions(status: string) {
     take: 100,
   })
 
+  // Enrich with church name (batch-fetch to avoid N+1)
+  const churchIds = [...new Set(
+    items.filter((s) => s.targetType === 'Church').map((s) => s.targetId),
+  )]
+  const churches = await prisma.church.findMany({
+    where: { id: { in: churchIds } },
+    select: { id: true, name: true },
+  })
+  const churchMap = new Map(churches.map((c) => [c.id, c.name]))
+
   return {
-    data: items.map((s) => ({ ...s, createdAt: s.createdAt.toISOString() })),
+    data: items.map((s) => ({
+      ...s,
+      createdAt: s.createdAt.toISOString(),
+      churchName: s.targetType === 'Church' ? (churchMap.get(s.targetId) ?? null) : null,
+    })),
   }
 }
 
@@ -174,17 +208,23 @@ export async function approveSuggestion(suggestionId: number) {
     select: { id: true, status: true, field: true, proposedValue: true, targetType: true, targetId: true },
   })
 
-  // Aplica a mudança no alvo
   if (updated.targetType === 'Church') {
-    await prisma.church.update({
-      where: { id: updated.targetId },
-      data: { [updated.field]: updated.proposedValue },
-    }).catch(() => null) // ignora se campo não existir no modelo
-  } else if (updated.targetType === 'MassSchedule') {
-    await prisma.massSchedule.update({
-      where: { id: updated.targetId },
-      data: { [updated.field]: updated.proposedValue },
-    }).catch(() => null)
+    const prismaField = CHURCH_FIELD_MAP[updated.field]
+    if (prismaField) {
+      await prisma.church.update({
+        where: { id: updated.targetId },
+        data: { [prismaField]: updated.proposedValue },
+      })
+    } else if (updated.field === 'COORDINATES') {
+      const coords = applyCoordinates(updated.proposedValue)
+      if (Object.keys(coords).length > 0) {
+        await prisma.church.update({
+          where: { id: updated.targetId },
+          data: coords,
+        })
+      }
+    }
+    // OTHER / SCHEDULE / WEBSITE → informational only, no DB change
   }
 
   return { data: updated }

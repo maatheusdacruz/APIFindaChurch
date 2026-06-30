@@ -406,6 +406,7 @@ enum ParishStatus {
 }
 
 enum GuardianStatus {
+  PENDING
   ACTIVE
   FROZEN
   REMOVED
@@ -467,6 +468,7 @@ model GuardianRole {
   status          GuardianStatus @default(ACTIVE)
   behavioralScore Float          @default(0.5)
   claimedAt       DateTime       @default(now())
+  requestNotes    String?
   updatedAt       DateTime       @updatedAt
 
   endorsementsReceived Endorsement[] @relation("EndorsementTarget")

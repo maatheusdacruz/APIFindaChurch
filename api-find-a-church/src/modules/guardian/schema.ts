@@ -1,6 +1,6 @@
 import { z, successSchema, type DocRegistrar } from '@/lib/openapi'
 
-export const GUARDIAN_STATUSES = ['ACTIVE', 'FROZEN', 'REMOVED'] as const
+export const GUARDIAN_STATUSES = ['PENDING', 'ACTIVE', 'FROZEN', 'REMOVED'] as const
 
 export const claimGuardianBodySchema = z.object({
   notes: z.string().max(500).optional().openapi({ description: 'Nota de justificativa para a reivindicação.' }),

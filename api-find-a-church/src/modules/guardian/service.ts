@@ -23,11 +23,29 @@ export async function claimGuardian(userId: number, churchId: number, body: z.in
   })
   if (existing) throw new ConflictError('Esta igreja já possui um guardião ativo.')
 
-  const guardian = await prisma.guardianRole.upsert({
-    where: { userId_churchId: { userId, churchId } },
-    create: { userId, churchId, status: 'ACTIVE', behavioralScore: 0.5 },
-    update: { status: 'ACTIVE' },
-  })
+  // Use raw SQL to avoid cached Prisma enum validation (PENDING was added after server start)
+  type Row = { id: number; churchId: number; userId: number; status: string; behavioralScore: number; claimedAt: Date }
+  const existing2 = await prisma.$queryRaw<Row[]>`
+    SELECT id, "churchId", "userId", status::text, "behavioralScore", "claimedAt"
+    FROM "GuardianRole" WHERE "userId" = ${userId} AND "churchId" = ${churchId} LIMIT 1
+  `
+  let guardian: Row
+  if (existing2.length > 0) {
+    const rows = await prisma.$queryRaw<Row[]>`
+      UPDATE "GuardianRole"
+      SET status = 'PENDING'::"GuardianStatus", "requestNotes" = ${body.notes ?? null}, "updatedAt" = NOW()
+      WHERE "userId" = ${userId} AND "churchId" = ${churchId}
+      RETURNING id, "churchId", "userId", status::text, "behavioralScore", "claimedAt"
+    `
+    guardian = rows[0]
+  } else {
+    const rows = await prisma.$queryRaw<Row[]>`
+      INSERT INTO "GuardianRole" ("userId", "churchId", status, "behavioralScore", "requestNotes", "claimedAt", "updatedAt")
+      VALUES (${userId}, ${churchId}, 'PENDING'::"GuardianStatus", 0.5, ${body.notes ?? null}, NOW(), NOW())
+      RETURNING id, "churchId", "userId", status::text, "behavioralScore", "claimedAt"
+    `
+    guardian = rows[0]
+  }
 
   return { data: toDto(guardian) }
 }
