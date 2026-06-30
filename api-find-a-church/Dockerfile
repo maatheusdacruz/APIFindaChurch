@@ -11,6 +11,9 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
+# Recebe o DATABASE_URL como build arg (vindo do .env via docker-compose).
+# Fica disponível como env var só durante o build — o arquivo .env não é copiado.
+ARG DATABASE_URL
 RUN npx prisma generate
 
 EXPOSE 3000
